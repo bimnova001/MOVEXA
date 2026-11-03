@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="MOVEXA logo">
+  <defs>
+    <linearGradient id="neon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7c4dff"/>
+      <stop offset="50%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#f43f5e"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="256" height="256" rx="48" fill="#0a0a14"/>
+  <!-- infinity loop -->
+  <path d="M64 128 C64 88 96 72 128 104 C160 72 192 88 192 128 C192 168 160 184 128 152 C96 184 64 168 64 128 Z"
+        fill="none" stroke="url(#neon)" stroke-width="14" stroke-linecap="round" filter="url(#glow)"/>
+  <!-- play mark -->
+  <path d="M118 104 L118 152 L156 128 Z" fill="#ffffff" filter="url(#glow)"/>
+  <text x="128" y="222" text-anchor="middle" font-family="Segoe UI, sans-serif"
+        font-size="26" font-weight="700" fill="url(#neon)">MOVEXA</text>
+</svg>
