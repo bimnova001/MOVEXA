@@ -29,11 +29,31 @@ def main() -> int:
     work.mkdir(parents=True, exist_ok=True)
 
     app = QApplication(sys.argv)
+    from app.theme import QSS  # noqa: E402
+    app.setStyleSheet(QSS)
+
+    # Loading screen: run the real check worker off-thread and verify every
+    # row resolves to a verdict before the menu is allowed to open.
+    from app.loading_screen import LoadingScreen
+    loading = LoadingScreen()
+    loading.show()
+    loading.start()
+    while loading._worker is not None and loading._worker.isRunning():
+        app.processEvents()
+    for _ in range(30):
+        app.processEvents()
+    rows = [label.text() for label in loading._row_labels]
+    assert all(text[:1] in ("✓", "!") for text in rows), rows
+    loading.grab().save(str(work / "loading.png"))
+    loading.close()
+
     from app.main_window import MainWindow
 
     window = MainWindow()
     window.show()
     app.processEvents()
+    # Menu (dashboard) capture before any project exists.
+    window.grab().save(str(work / "menu.png"))
 
     project_dir = work / "SmokeProject"
     if (project_dir / "project.json").exists():
@@ -133,6 +153,9 @@ def main() -> int:
     assert len(rig_parts) == 6, "rig lost on save/reopen"
     assert reopened.scene_by_id(scene_id).transition == "crossfade"
 
+    # Player state may carry from before the reopen; frame 0 is the anchored
+    # view (camera-follow/crossfade legitimately moved the framing later).
+    window.controller.player.seek(0)
     app.processEvents()
     window.grab().save(str(work / "reopened.png"))
 

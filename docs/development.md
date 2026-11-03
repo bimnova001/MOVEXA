@@ -9,6 +9,22 @@ python -m pytest tests   # GUI-free test suite
 python scripts/smoke_gui.py  # headless render smoke test
 ```
 
+## Startup flow
+
+`main.py` opens `app/loading_screen.py` first; `app/envcheck.py`
+(Qt-free) runs machine/library checks — Python 3.10+, PySide6, Pillow, numpy,
+FFmpeg on PATH, writable user storage — on a worker thread while the
+checklist streams results.
+Only when every required check passes does the menu (`app/dashboard.py`,
+an editor-style home screen with recent-project cards) open automatically.
+
+## GUI smoke outputs
+
+`scripts/smoke_gui.py` captures PNGs into `scripts/_smoke_out/`:
+`loading.png`, `menu.png`, `workspace.png`, keyframe comparisons and a
+save/reopen render. Review these screenshots when touching the theme
+(`app/theme.py`), dashboard or workspace layout.
+
 ## Conventions
 
 - Run from the repository root; imports are top-level module names.

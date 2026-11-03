@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from PySide6.QtGui import QAction, QIcon, QPixmap
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
@@ -52,6 +52,9 @@ class MainWindow(QMainWindow):
             bus.subscribe(event, self._update_status)
         bus.subscribe("project.saved", self._update_status)
         bus.subscribe("project.closed", self._show_dashboard)
+        # The workspace "Home" button asks to leave through the event bus so
+        # both pages stay loosely coupled.
+        bus.subscribe("dashboard.shown", self._show_dashboard)
 
         self._build_menus()
         self._build_status_bar()
@@ -153,7 +156,8 @@ class MainWindow(QMainWindow):
     def _about(self) -> None:
         box = QMessageBox(self)
         box.setWindowTitle("About MOVEXA")
-        box.setIconPixmap(QPixmap(str(_branding("logo.png"))).scaledToWidth(200))
+        from app.branding import svg_pixmap
+        box.setIconPixmap(svg_pixmap(200))
         box.setText("MOVEXA 0.1.0\n\nCreate Motion. Tell Stories.\n\n"
                     "AI-assisted 2D animation studio for Windows.")
         box.exec()
