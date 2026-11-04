@@ -28,6 +28,7 @@ controlled AI instruction pipeline, in one workspace.
 | 🖼 **Compositor** | layers, parenting, opacity, procedural shapes, text, image assets |
 | 📤 **Export** | deterministic frame renderer → FFmpeg → MP4 (H.264 + AAC audio mix) |
 | 🤖 **AI** | provider-adapter engine (`mock`, OpenAI, Anthropic, Gemini) — structured, validated scene generation, never raw generated code |
+| 💬 **AI Agent** | editor chat dock: "add rect at 600,300", "spin 0-60", "outline: …", "generate a scene: …" — offline via the deterministic Mock provider |
 | 🔊 **Audio** | clip import, multi-track mixing, lip-sync envelopes, SRT subtitles |
 
 ## Quick start

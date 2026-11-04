@@ -183,6 +183,27 @@ def main() -> int:
     app.processEvents()
     assert controller.project.scene_by_id(scene_id).objects == []
 
+    # AI agent dock (rail mode 2): local intent + mock scene generation.
+    window.workspace.rail_buttons[1].click()
+    app.processEvents()
+    agent_panel = window.workspace.agent_panel
+    agent_panel.input.setText("add circle at 700,400 #22d3ee")
+    agent_panel._send()
+    app.processEvents()
+    circle = [o for o in controller.project.scene_by_id(scene_id).objects
+              if o.type == "ellipse"]
+    assert circle and abs(circle[0].x - 700) < 1e-6
+
+    agent_panel.input.setText("generate a scene: rain over the city")
+    agent_panel._send()
+    deadline = __import__("time").time() + 10
+    while agent_panel._worker is not None and __import__("time").time() < deadline:
+        app.processEvents()
+    images = [o for o in controller.project.scene_by_id(scene_id).objects
+              if o.type == "rect" or o.type == "text"]
+    assert len(images) >= 2, "mock scene did not build objects"
+    window.grab().save(str(work / "agent.png"))
+
     print("smoke OK - outputs in", work)
     return 0
 

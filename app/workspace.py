@@ -9,6 +9,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -17,10 +18,13 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSlider,
     QSplitter,
+    QStackedWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
+from app.agent_panel import AgentPanel
 from app.branding import svg_pixmap
 from app.canvas import CanvasWidget
 from app.controller import AppController
@@ -181,20 +185,60 @@ class WorkspaceScreen(QWidget):
         bar.addWidget(export_btn)
 
         self.asset_browser = AssetBrowser(controller)
+        self.agent_panel = AgentPanel(controller)
         self.properties = PropertiesPanel(controller)
         self.properties_scroll = QScrollArea()
         self.properties_scroll.setWidgetResizable(True)
         self.properties_scroll.setWidget(self.properties)
         self.transport = TransportBar(controller)
 
+        # Editor convention (CapCut/Resolve): an icon rail on the left swaps
+        # the dock contents - media, AI agent and later tools share one slot.
+        self._rail_actions: list[tuple] = [
+            ("▦", "Assets"),
+            ("✦", "AI Agent — script, scenes, shapes"),
+        ]
+        rail_widget = QWidget()
+        rail_widget.setObjectName("rail")
+        self.rail = QVBoxLayout(rail_widget)
+        self.rail.setContentsMargins(4, 8, 4, 8)
+        self.rail.setSpacing(6)
+        self._rail_group = QButtonGroup(self)
+        self.rail_buttons: list[QToolButton] = []
+        for index, (glyph, tip) in enumerate(self._rail_actions):
+            button = QToolButton()
+            button.setText(glyph)
+            button.setObjectName("railBtn")
+            button.setFixedSize(40, 40)
+            button.setToolTip(tip)
+            button.setCheckable(True)
+            button.clicked.connect(lambda _c=False, i=index: self._set_dock_index(i))
+            self._rail_group.addButton(button)
+            self.rail.addWidget(button, 0, Qt.AlignmentFlag.AlignHCenter)
+            self.rail_buttons.append(button)
+        self.rail.addStretch(1)
+        rail_widget.setFixedWidth(48)
+
+        self.left_dock = QStackedWidget()
+        self.left_dock.addWidget(self.asset_browser)
+        self.left_dock.addWidget(self.agent_panel)
+
+        left_row = QHBoxLayout()
+        left_row.setContentsMargins(0, 0, 0, 0)
+        left_row.setSpacing(2)
+        left_row.addWidget(rail_widget)
+        left_row.addWidget(self.left_dock, 1)
+        left_dock_widget = QWidget()
+        left_dock_widget.setLayout(left_row)
+
         self.scene_strip = SceneStrip(controller)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.asset_browser.setMinimumWidth(190)
-        self.asset_browser.setMaximumWidth(320)
+        self.left_dock.setMinimumWidth(220)
+        self.left_dock.setMaximumWidth(440)
         self.properties.setMinimumWidth(230)
         self.properties.setMaximumWidth(340)
-        splitter.addWidget(self.asset_browser)
+        splitter.addWidget(left_dock_widget)
         splitter.addWidget(self.canvas)
         splitter.addWidget(self.properties_scroll)
         splitter.setStretchFactor(1, 1)
@@ -203,8 +247,9 @@ class WorkspaceScreen(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self.toolbar)
-        layout.addWidget(self.scene_strip)
         layout.addWidget(splitter, 1)
+        # Timeline row under the viewport, then transport: editor convention.
+        layout.addWidget(self.scene_strip)
         layout.addWidget(self.transport)
 
         # Preview clock. 30 Hz ticks are cheap; the player converts wall time
@@ -239,6 +284,11 @@ class WorkspaceScreen(QWidget):
         if self.controller.player.tick():
             self.controller.bus.publish(
                 "timeline.frame", {"frame": self.controller.player.frame})
+
+    def _set_dock_index(self, index: int) -> None:
+        self.left_dock.setCurrentIndex(index)
+        for row, button in enumerate(self.rail_buttons):
+            button.setChecked(row == index)
 
     def _add_shape(self) -> None:
         if self.controller.current_scene_id is None:

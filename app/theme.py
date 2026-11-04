@@ -156,6 +156,33 @@ QFrame#topbar {{
     border-bottom: 1px solid {BRAND['border']};
 }}
 QLabel#topbarTitle {{ color: {BRAND['cyan']}; font-size: 14px; font-weight: 600; }}
+QWidget#rail {{ background: {BRAND['bg_alt']}; border-right: 1px solid {BRAND['border']}; }}
+QToolButton#railBtn {{
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-size: 16px;
+    color: {BRAND['text_muted']};
+}}
+QToolButton#railBtn:hover {{ background: {BRAND['bg_input']}; color: {BRAND['text']}; }}
+QToolButton#railBtn:checked {{
+    background: {BRAND['bg_input']};
+    border-color: {BRAND['cyan']};
+    color: {BRAND['cyan']};
+}}
+QLabel#panelTitle {{ font-size: 14px; font-weight: 700; }}
+QLabel#agentChip {{
+    background: transparent; border: 1px solid {BRAND['border']};
+    border-radius: 9px; padding: 2px 8px;
+    color: {BRAND['text_muted']}; font-size: 11px;
+}}
+QListWidget#agentLog {{
+    background: {BRAND['bg_panel']};
+    border: 1px solid {BRAND['border']};
+    border-radius: 7px;
+}}
+QListWidget#agentLog::item {{ padding: 4px; border-radius: 0; }}
+QListWidget#agentLog::item:hover {{ background: transparent; }}
 QFrame#sceneDock {{
     background: {BRAND['bg_alt']};
     border-bottom: 1px solid {BRAND['border']};

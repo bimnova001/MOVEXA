@@ -48,6 +48,17 @@ history by design. The Edit menu and the Ctrl+K command palette drive it.
 2. Register it in `ProviderManager._registry`.
 3. Add a settings field and storage entry in `ai/settings.py`.
 
+## AI agent
+
+`app/agent.py` routes editor chat (Qt-free): local intents ("add rect at
+600,300", "spin 0-60") execute deterministically through the controller =
+fully offline; "outline …" and "generate a scene …" go to the provider —
+the Mock provider answers offline, real providers need keys in
+`%APPDATA%/movexa/ai_settings.json`. Provider round-trips run on a
+QThread in `app/agent_panel.py`, and returning JSON crosses
+`validate_scene_output` before `apply_scene_output` mutates the project on
+the GUI thread.
+
 ## Adding an action
 
 1. Implement the handler in `engine/actions.py`.

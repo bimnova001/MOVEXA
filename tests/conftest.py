@@ -14,3 +14,11 @@ if str(ROOT) not in sys.path:
 def _isolated_appdata(tmp_path, monkeypatch):
     """Redirect recents storage so tests never touch the real user profile."""
     monkeypatch.setenv("APPDATA", str(tmp_path / "appdata"))
+
+
+@pytest.fixture()
+def controller(tmp_path):
+    from app.controller import AppController
+    controller = AppController()
+    controller.new_project(tmp_path / "FixtureProject", "Fixture")
+    return controller

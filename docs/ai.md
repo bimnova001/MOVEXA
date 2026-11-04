@@ -33,6 +33,17 @@ Environment variables `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and
 4. Apply with `apply_scene_output`, which creates objects and routes actions
    through `AppController.apply_action`.
 
+## AI agent in the editor
+
+`app/agent.py` + `app/agent_panel.py` expose the pipeline as a chat dock:
+
+- local intents ("add rect at 600,300", "spin 0-60") are deterministic and
+  run directly through the controller — no provider needed;
+- "outline: …" flows through `generate_text` (mock returns a deterministic
+  outline offline);
+- "generate a scene: …" flows through `generate_structured` on a worker
+  thread; validated JSON is applied back on the GUI thread.
+
 ## Controlled instruction format
 
 Only the actions defined by the engine are allowed:
