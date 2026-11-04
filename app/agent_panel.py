@@ -14,6 +14,9 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
+    QDialog,
+    QComboBox,
+    QFormLayout,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -27,6 +30,7 @@ from ai.providers import (
     ProviderManager,
     ProviderNotConfiguredError,
 )
+from ai.settings import load_settings, save_settings
 from ai._impl import apply_scene_output, validate_scene_output
 from app import agent
 from app.controller import AppController
@@ -87,6 +91,12 @@ class AgentPanel(QWidget):
         head.addWidget(title)
         head.addStretch(1)
         head.addWidget(self.status_chip)
+        provider_btn = QPushButton("⚙")
+        provider_btn.setObjectName("topbarBtn")
+        provider_btn.setFixedWidth(30)
+        provider_btn.setToolTip("Provider, API key and model…")
+        provider_btn.clicked.connect(self._open_provider_settings)
+        head.addWidget(provider_btn)
         self._refresh_chip()
 
         self.log = QListWidget()
@@ -152,6 +162,70 @@ class AgentPanel(QWidget):
             "padding: 2px 8px;" if offline else
             "color: #22d3ee; border: 1px solid #2a2a36; border-radius: 9px; "
             "padding: 2px 8px;")
+
+    # -- provider settings ------------------------------------------------------
+
+    def _open_provider_settings(self) -> None:
+        """In-app key/model/provider picker persisted to user storage."""
+        current = load_settings()
+        dialog = QDialog(self)
+        dialog.setWindowTitle("AI Provider")
+        form = QFormLayout(dialog)
+        provider_combo = QComboBox()
+        provider_combo.addItems(self.manager.available())
+        provider_combo.setCurrentText(current.default_provider)
+        key_field = QLineEdit(current.openai_api_key)
+        key_field.setPlaceholderText("sk-…")
+        key_field.setEchoMode(QLineEdit.EchoMode.Password)
+        key_field.setProperty("provider", current.default_provider)
+        model_field = QLineEdit(current.openai_model)
+        model_field.setPlaceholderText("(auto)")
+
+        def _swap_provider(name: str) -> None:
+            _key_map = {
+                "openai": (current.openai_api_key, current.openai_model),
+                "anthropic": (current.anthropic_api_key, current.anthropic_model),
+                "gemini": (current.gemini_api_key, current.gemini_model),
+                "mock": ("", ""),
+            }
+            api_key, model = _key_map.get(name, ("", ""))
+            key_field.setText(api_key)
+            key_field.setProperty("provider", name)
+            model_field.setText(model)
+
+        provider_combo.currentTextChanged.connect(_swap_provider)
+
+        buttons = QHBoxLayout()
+        ok = QPushButton("Save")
+        ok.setObjectName("primary")
+        ok.clicked.connect(dialog.accept)
+        cancel = QPushButton("Cancel")
+        cancel.clicked.connect(dialog.reject)
+        buttons.addStretch(1)
+        buttons.addWidget(cancel)
+        buttons.addWidget(ok)
+
+        form.addRow("Provider", provider_combo)
+        form.addRow("API key", key_field)
+        form.addRow("Model", model_field)
+        form.addRow(buttons)
+        if not dialog.exec():
+            return
+        name = provider_combo.currentText()
+        api_key = key_field.text().strip()
+        model = model_field.text().strip()
+        if name == "openai":
+            current.openai_api_key, current.openai_model = api_key, model
+        elif name == "anthropic":
+            current.anthropic_api_key, current.anthropic_model = api_key, model
+        elif name == "gemini":
+            current.gemini_api_key, current.gemini_model = api_key, model
+        current.default_provider = name
+        save_settings(current)
+        self.manager = ProviderManager(load_settings())
+        self._refresh_chip()
+        self.system_say(f"Provider set to {name}."
+                        if name != "mock" else "Provider set to mock (offline).")
 
     # -- dispatch --------------------------------------------------------------
 

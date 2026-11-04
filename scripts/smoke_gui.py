@@ -202,7 +202,25 @@ def main() -> int:
     images = [o for o in controller.project.scene_by_id(scene_id).objects
               if o.type == "rect" or o.type == "text"]
     assert len(images) >= 2, "mock scene did not build objects"
-    window.grab().save(str(work / "agent.png"))
+
+    # Real timeline: ruler widget present, drag math wired, provider picker
+    # reachable, HTTP providers importable with defaults applied.
+    from app.timeline import TimelineWidget, edge_hit, resize_duration
+    timeline = window.workspace.timeline
+    assert isinstance(timeline, TimelineWidget), "timeline missing"
+    assert resize_duration(90, 60.0, 180, 360.0) == 120
+    assert edge_hit([(100.0, 200.0)], 203.0) == 0
+    timeline.grab().save(str(work / "timeline.png"))
+
+    from PySide6.QtWidgets import QPushButton  # noqa: E402
+    settings_btn = agent_panel.findChildren(QPushButton)
+    assert any(btn.text() == "⚙" for btn in settings_btn), "provider picker missing"
+    from ai.settings import load_settings
+    assert load_settings().default_provider == "mock"
+    from ai._impl import OpenAIProvider
+    openai_provider = OpenAIProvider("sk-smoke")
+    assert openai_provider.model == "gpt-4o-mini"
+    agent_panel.grab().save(str(work / "agent.png"))
 
     print("smoke OK - outputs in", work)
     return 0

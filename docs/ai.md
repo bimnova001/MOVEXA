@@ -6,14 +6,23 @@ AI SDK. Providers implement `BaseProvider` and return plain Python data.
 ## Available providers
 
 - `mock` — deterministic, offline, used for tests and authoring.
-- `openai`, `anthropic`, `gemini` — require an API key. Adapters are present
-  but need their SDK installed; without a key they raise
+- `openai`, `anthropic`, `gemini` — real HTTP adapters over the standard
+  library (no provider SDK is installed or needed). Structured requests use
+  each API's JSON mode and the first JSON object in the reply is extracted
+  and validated before it can reach the engine. Without a key they raise
   `ProviderNotConfiguredError`.
+
+Model names are configurable per provider (`openai_model`, `anthropic_model`,
+`gemini_model` in `ai_settings.json`, or env vars `MOVEXA_OPENAI_MODEL`,
+`MOVEXA_ANTHROPIC_MODEL`, `MOVEXA_GEMINI_MODEL`); sensible defaults are
+applied when unset.
 
 ## API keys
 
 Keys are stored in user-level storage (`%APPDATA%/movexa/ai_settings.json`),
-never in project files, so projects stay portable.
+never in project files, so projects stay portable. The AI Agent dock has a
+⚙ button that opens an in-app provider/key/model picker writing to that
+same file.
 
 ```python
 from ai.settings import load_settings, save_settings

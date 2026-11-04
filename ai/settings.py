@@ -25,6 +25,7 @@ def load_settings() -> ProviderSettings:
         return ProviderSettings.from_env()
     settings = ProviderSettings.from_env()
     for key in ("openai_api_key", "anthropic_api_key", "gemini_api_key",
+                "openai_model", "anthropic_model", "gemini_model",
                 "default_provider"):
         if key in data:
             setattr(settings, key, data[key])
@@ -36,6 +37,9 @@ def save_settings(settings: ProviderSettings) -> None:
         "openai_api_key": settings.openai_api_key,
         "anthropic_api_key": settings.anthropic_api_key,
         "gemini_api_key": settings.gemini_api_key,
+        "openai_model": settings.openai_model,
+        "anthropic_model": settings.anthropic_model,
+        "gemini_model": settings.gemini_model,
         "default_provider": settings.default_provider,
     }
     settings_path().write_text(json.dumps(data, indent=2), encoding="utf-8")
