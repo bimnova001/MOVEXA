@@ -295,4 +295,7 @@ class WorkspaceScreen(QWidget):
             QMessageBox.critical(self, "Export failed", str(exc))
             return
         progress.setValue(progress.maximum())
-        QMessageBox.information(self, "Export complete", f"Saved to {path}")
+        # Desktop pattern: success confirmations never steal focus.
+        toast = getattr(self.window(), "toast", None)
+        if toast is not None:
+            toast.info(f"Export complete — saved to {path}")

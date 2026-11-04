@@ -149,6 +149,34 @@ QSlider::sub-page:horizontal {{
     border-radius: 2px;
 }}
 
+/* ---- command palette + toasts ---------------------------------------- */
+QDialog {{ background: {BRAND['bg_panel']}; border: 1px solid {BRAND['border']}; }}
+QLineEdit#paletteSearch {{
+    font-size: 15px;
+    padding: 8px 10px;
+    background: {BRAND['bg_input']};
+    border: 1px solid {BRAND['purple']};
+    border-radius: 7px;
+}}
+QListWidget#paletteList {{
+    background: {BRAND['bg_input']};
+    border: 1px solid {BRAND['border']};
+    border-radius: 7px;
+    font-size: 14px;
+}}
+QListWidget#paletteList::item {{ padding: 8px 10px; border-radius: 5px; }}
+QListWidget#paletteList::item:hover {{ background: {BRAND['bg_panel']}; }}
+
+QFrame#toast {{
+    background: {BRAND['bg_panel']};
+    border: 1px solid {BRAND['cyan']};
+    border-radius: 8px;
+}}
+QLabel#toastText {{
+    background: transparent; border: none;
+    color: {BRAND['text']}; font-size: 13px; max-width: 360px;
+}}
+
 /* ---- shared lists / inputs ------------------------------------------- */
 QListWidget, QTreeWidget {{
     background: {BRAND['bg_panel']};

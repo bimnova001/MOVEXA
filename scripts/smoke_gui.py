@@ -159,6 +159,30 @@ def main() -> int:
     app.processEvents()
     window.grab().save(str(work / "reopened.png"))
 
+    # Command palette: filter + item lookup without a modal exec loop.
+    from app.palette import CommandPalette
+    items = window._palette_items()  # noqa: SLF001 - smoke exercises internals
+    assert any("Export" in name for name, _ in items), items
+    palette = CommandPalette(items)
+    palette.search.setText("add")
+    palette._filter("add")  # noqa: SLF001
+    assert palette.list.count() >= 3, palette.list.count()
+    print("palette rows for 'add':", palette.list.count())
+
+    # Toast: non-blocking confirmation renders into the window corner.
+    window.toast.info("Undo works — smoke toast OK")
+    app.processEvents()
+    window.toast.grab().save(str(work / "toast.png"))
+
+    # Undo through the actual menu action restores project state.
+    controller = window.controller
+    scene_id = controller.current_scene_id
+    controller.add_object(scene_id, type="rect")
+    assert controller.undo_stack.can_undo()
+    window.undo_action.trigger()
+    app.processEvents()
+    assert controller.project.scene_by_id(scene_id).objects == []
+
     print("smoke OK - outputs in", work)
     return 0
 

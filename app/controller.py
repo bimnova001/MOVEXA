@@ -39,8 +39,40 @@ from project.schema import (
     SceneObject,
     validate_project,
 )
+from app.undo import UndoStack, humanize
 
 log = logging.getLogger(__name__)
+
+# Mutations tracked by undo/redo. Project lifecycle methods (new/open/close/
+# save) and navigation/playback are deliberately excluded: they change the
+# editing context, not the artwork.
+UNDOABLE_METHODS = (
+    "add_scene",
+    "remove_scene",
+    "duplicate_scene",
+    "reorder_scene",
+    "update_scene_metadata",
+    "set_scene_background",
+    "add_object",
+    "add_object_from_asset",
+    "update_object",
+    "remove_object",
+    "set_keyframes",
+    "remove_keyframe_at",
+    "clear_object_tracks",
+    "set_camera_keyframes",
+    "clear_camera_tracks",
+    "create_character_rig",
+    "apply_action",
+    "set_camera_follow",
+    "add_audio_clip",
+    "remove_audio_clip",
+    "add_subtitle",
+    "remove_subtitle",
+    "apply_lip_sync",
+    "import_asset",
+    "remove_asset",
+)
 
 
 class AppController:
@@ -58,6 +90,85 @@ class AppController:
         self.player = PlaybackController(fps=fps)
         self.current_scene_id: str | None = None
         self.selected_object_id: str | None = None
+        self.undo_stack = UndoStack()
+        self._undo_depth = 0  # nested wrapped calls must not double-push
+        for name in UNDOABLE_METHODS:
+            setattr(self, name, self._wrap_undoable(name, getattr(self, name)))
+
+    def _wrap_undoable(self, name: str, original):
+        """Snapshot before/after so undo/redo restore exact project state.
+
+        Nested undoable calls (e.g. add_object_from_asset -> add_object) run
+        bare while an outer wrapper is active: the outermost wrapper records
+        the single user-visible step.
+        """
+        from functools import wraps
+
+        @wraps(original)
+        def wrapper(*args, **kwargs):
+            if self._undo_depth > 0:
+                return original(*args, **kwargs)
+            before = self._snapshot()
+            self._undo_depth += 1
+            try:
+                result = original(*args, **kwargs)
+            finally:
+                self._undo_depth -= 1
+            after = self._snapshot()
+            if before != after:
+                self.undo_stack.push(humanize(name), before, after)
+                self.bus.publish("history.changed", {
+                    "can_undo": self.undo_stack.can_undo(),
+                    "can_redo": self.undo_stack.can_redo(),
+                    "last_action": humanize(name),
+                })
+            return result
+
+        return wrapper
+
+    def _snapshot(self) -> dict | None:
+        return self.project.to_data() if self.project is not None else None
+
+    def undo(self) -> str | None:
+        step = self.undo_stack.undo()
+        if step is None:
+            return None
+        self._restore_snapshot(step.before)
+        self.bus.publish("history.changed", {
+            "can_undo": self.undo_stack.can_undo(),
+            "can_redo": self.undo_stack.can_redo(),
+            "last_action": step.label,
+        })
+        return step.label
+
+    def redo(self) -> str | None:
+        step = self.undo_stack.redo()
+        if step is None:
+            return None
+        self._restore_snapshot(step.after)
+        self.bus.publish("history.changed", {
+            "can_undo": self.undo_stack.can_undo(),
+            "can_redo": self.undo_stack.can_redo(),
+            "last_action": step.label,
+        })
+        return step.label
+
+    def _restore_snapshot(self, data: dict) -> None:
+        self.manager.current = Project.from_data(data)
+        prev_scene = self.current_scene_id
+        prev_object = self.selected_object_id
+        scene_ids = {s.id for s in self.project.scenes}
+        if prev_scene not in scene_ids:
+            prev_scene = self.project.scenes[0].id if self.project.scenes else None
+            prev_object = None
+        if prev_scene is not None:
+            self.select_scene(prev_scene)
+            if prev_object is not None and self.project.scene_by_id(
+                    prev_scene).object_by_id(prev_object) is not None:
+                self.selected_object_id = prev_object
+                self.bus.publish("object.selected", {
+                    "scene_id": prev_scene, "object_id": prev_object,
+                })
 
     @property
     def project(self) -> Project | None:
@@ -83,10 +194,13 @@ class AppController:
         first = self.add_scene(name="Scene 1", publish_event=False)
         self.select_scene(first.id)
         self.save()
+        # Start history clean: a brand-new project has nothing to undo.
+        self.undo_stack.clear()
         return project
 
     def open_project(self, directory: Path | str) -> Project:
         project = self.manager.open_project(directory)
+        self.undo_stack.clear()
         self._reset_selection()
         self.bus.publish("project.opened", {
             "project": project, "directory": str(self.manager.current_dir),
@@ -106,6 +220,7 @@ class AppController:
         self.require_project()
         self.manager.current = None
         self.manager.current_dir = None
+        self.undo_stack.clear()
         self._reset_selection()
         self.bus.publish("project.closed", {})
 

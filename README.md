@@ -112,6 +112,7 @@ Specs at the repo root: [`INFO.md`](info.md) ·
 | 4 — Rendering | deterministic renderer, MP4 export | ✅ |
 | 5 — AI | provider adapters, prompts, scene generation | ✅ |
 | 6 — Audio | clips, subtitles, lip sync, mixing, MP4 muxing | ✅ |
+| 7 — Desktop polish | loading checks, editor-home menu, undo/redo, command palette, toasts | ✅ |
 
 ## Rules of the road
 

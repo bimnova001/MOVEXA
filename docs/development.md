@@ -34,6 +34,14 @@ save/reopen render. Review these screenshots when touching the theme
 - Tests must be GUI-free where possible; the controller is deliberately
   Qt-free.
 
+## Undo/redo
+
+`app/undo.py` keeps a bounded snapshot history (project data before/after
+each mutation); every `UNDOABLE_METHODS` entry in `app/controller.py` is
+wrapped automatically, so adding a new mutating method to that tuple is all
+it takes. Project lifecycle (new/open/close/save) and playback are outside
+history by design. The Edit menu and the Ctrl+K command palette drive it.
+
 ## Adding a provider
 
 1. Subclass the adapter in `ai/providers.py`.
