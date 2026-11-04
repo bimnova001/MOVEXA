@@ -140,39 +140,67 @@ class NewProjectDialog(QDialog):
     # -- workflow ------------------------------------------------------------
 
 class ProjectCard(QFrame):
-    """Recent project card: name, modified date, tooltip path, dbl-click opens."""
+    """Recent project card: name, scene stats, dbl-click opens, ✕ unpins."""
 
-    def __init__(self, directory: str,
-                 on_open: Callable[[Path], None]) -> None:
+    def __init__(self, directory: str, on_open: Callable[[Path], None],
+                 on_remove: Callable[[Path], None] | None = None) -> None:
         super().__init__()
         self.setObjectName("card")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip(directory)
+        if on_remove is not None:
+            self._on_remove = on_remove
+        else:
+            self._on_remove = lambda _d: None
         self._on_open = on_open
         self._directory = directory
 
+        from json import JSONDecodeError, loads
+        scenes = 0
+        total_frames = 0
         project_path = Path(directory) / "project.json"
         modified = "—"
-        if project_path.exists():
-            try:
+        try:
+            if project_path.exists():
                 mtime = project_path.stat().st_mtime
                 modified = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
-            except OSError:
-                pass
+                with open(project_path, encoding="utf-8") as fh:
+                    data = loads(fh)
+                scenes = len(data.get("scenes", []))
+                total_frames = sum(int(s.get("duration_frames", 0))
+                                   for s in data.get("scenes", []))
+        except (OSError, JSONDecodeError, TypeError, ValueError):
+            pass
 
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
         inner_name = QLabel(Path(directory).name or directory)
         inner_name.setObjectName("cardTitle")
         inner_name.setWordWrap(True)
-        inner_name.setMaximumHeight(44)
+        title_row.addWidget(inner_name, 1)
+        if on_remove is not None:
+            remove_btn = QPushButton("✕")
+            remove_btn.setObjectName("cardRemove")
+            remove_btn.setFixedSize(24, 24)
+            remove_btn.setToolTip("Remove from recents (folder is kept)")
+            remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            remove_btn.clicked.connect(
+                lambda: self._on_remove(Path(self._directory)))
+            title_row.addWidget(remove_btn)
 
         caption = QLabel(f"Modified {modified}")
         caption.setObjectName("cardMeta")
-        caption.setWordWrap(True)
+        stats = QLabel(
+            f"{scenes} scene{'s' if scenes != 1 else ''}"
+            f" · {total_frames} frames" if scenes else "empty project")
+        stats.setObjectName("cardMeta")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 14, 16, 12)
-        layout.addWidget(inner_name)
+        layout.setContentsMargins(16, 12, 10, 12)
+        layout.setSpacing(3)
+        layout.addLayout(title_row)
         layout.addWidget(caption)
+        layout.addWidget(stats)
         layout.addStretch(1)
 
     def mouseDoubleClickEvent(self, event) -> None:  # noqa: N802
@@ -299,8 +327,13 @@ class DashboardScreen(QWidget):
             return
         self.empty_state.hide()
         for index, directory in enumerate(directories):
-            card = ProjectCard(str(directory), self._open_project)
+            card = ProjectCard(str(directory), self._open_project,
+                               on_remove=self._remove_recent)
             self.cards_grid.addWidget(card, index // 3, index % 3)
+
+    def _remove_recent(self, directory: Path) -> None:
+        self.controller.manager.remove_recent(directory)
+        self._reload_recent()
 
     def _new_project(self) -> None:
         dialog = NewProjectDialog(self)

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from app.controller import AppController
 from app.dashboard import DashboardScreen
+from app.native import apply_dark_titlebar
 from app.toast import ToastArea
 from app.workspace import WorkspaceScreen
 
@@ -37,6 +38,8 @@ class MainWindow(QMainWindow):
             self.restoreGeometry(geometry)
         else:
             self.resize(1280, 800)
+        # Dark native frame row (QSS cannot paint the OS titlebar).
+        apply_dark_titlebar(self)
 
         self.controller = AppController()
         self._dirty = False

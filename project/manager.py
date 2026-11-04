@@ -139,6 +139,14 @@ class ProjectManager:
             json.dump(recents, fh)
         return recents
 
+    def remove_recent(self, directory: Path | str) -> list[str]:
+        """Drop one entry from recents (the project folder itself stays)."""
+        directory = str(Path(directory).resolve())
+        recents = [d for d in self.load_recent() if d != directory]
+        with open(self.recent_file(), "w", encoding="utf-8") as fh:
+            json.dump(recents, fh)
+        return recents
+
     def load_recent(self) -> list[str]:
         try:
             with open(self.recent_file(), encoding="utf-8") as fh:

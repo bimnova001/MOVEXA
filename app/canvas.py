@@ -113,6 +113,12 @@ class CanvasWidget(QWidget):
         snapshots = {o.id: object_snapshot(o, frame) for o in scene.objects}
         self._paint_selection(painter, scene, graph, snapshots)
 
+        # Stage frame line: letterbox stays readable as letterbox.
+        painter.setOpacity(1.0)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor("#2a2a36"), 1))
+        painter.drawRect(QRectF(0, 0, sw, sh))
+
     def _paint_scene_pass(
         self, painter: QPainter, project: Project, scene, frame: int,
         alpha: float, sw: float, sh: float,

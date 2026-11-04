@@ -5,7 +5,7 @@ import logging
 import sys
 from pathlib import Path
 
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import QApplication
 
 from app.loading_screen import LoadingScreen
@@ -32,6 +32,8 @@ def main() -> int:
     app.setOrganizationName("MOVEXA")
     app.setWindowIcon(QIcon(str(_branding("icon-256.png"))))
     app.setStyleSheet(QSS)
+    # Windows renders the UI, not Qt defaults.
+    app.setFont(QFont("Segoe UI", 10))
 
     # Loading screen first: machine/library checks stream onto the splash,
     # then (only when required checks pass) the menu opens automatically via

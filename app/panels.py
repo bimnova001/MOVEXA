@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -213,19 +214,30 @@ class SceneStrip(QWidget):
         del_btn.clicked.connect(self._delete)
 
         self.list = QListWidget()
+        self.list.setObjectName("sceneList")
         self.list.setFlow(QListWidget.Flow.LeftToRight)
-        self.list.setFixedHeight(68)
+        self.list.setFixedHeight(62)
         self.list.currentRowChanged.connect(self._on_row)
 
         buttons = QHBoxLayout()
+        buttons.setContentsMargins(8, 4, 8, 4)
+        buttons.setSpacing(6)
         for widget in (add_btn, left_btn, right_btn, dup_btn, rename_btn, del_btn):
+            widget.setObjectName("topbarBtn")
             buttons.addWidget(widget)
         buttons.addStretch(1)
 
+        dock = QFrame()
+        dock.setObjectName("sceneDock")
+        dock_layout = QVBoxLayout(dock)
+        dock_layout.setContentsMargins(0, 0, 0, 0)
+        dock_layout.setSpacing(3)
+        dock_layout.addLayout(buttons)
+        dock_layout.addWidget(self.list)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addLayout(buttons)
-        layout.addWidget(self.list)
+        layout.addWidget(dock)
 
         for event in ("scene.created", "scene.removed", "scene.reordered",
                       "project.opened", "project.created"):
