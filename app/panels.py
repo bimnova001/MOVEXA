@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGroupBox,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -32,6 +33,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QStackedWidget,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -88,25 +90,41 @@ class AssetBrowser(QWidget):
 
         self.list = QListWidget()
         self.list.setViewMode(QListWidget.ViewMode.IconMode)
-        self.list.setIconSize(QSize(72, 72))
+        self.list.setIconSize(QSize(64, 64))
         self.list.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._context_menu)
         self.list.itemDoubleClicked.connect(lambda _item: self._add_to_scene())
 
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Search assets…")
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self._refilter)
+
         import_btn = QPushButton("Import assets...")
         import_btn.clicked.connect(self._import)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
         layout.addWidget(_panel_header("Assets"))
+        layout.addWidget(self.search)
         layout.addWidget(self.list, 1)
         layout.addWidget(import_btn)
 
         for event in ("asset.imported", "asset.removed", "project.opened", "project.created"):
             controller.bus.subscribe(event, lambda _data: self._reload())
         self._reload()
+
+    def _refilter(self, text: str) -> None:
+        needle = text.strip().lower()
+        for row in range(self.list.count()):
+            item = self.list.item(row)
+            name = (item.text() or "").lower()
+            caption = (item.toolTip() or "").lower()
+            item.setHidden(bool(needle) and needle not in name
+                           and needle not in caption)
 
     def _reload(self) -> None:
         self.list.clear()
@@ -216,7 +234,9 @@ class SceneStrip(QWidget):
         self.list = QListWidget()
         self.list.setObjectName("sceneList")
         self.list.setFlow(QListWidget.Flow.LeftToRight)
-        self.list.setFixedHeight(62)
+        # The tab list is hidden: the real TimelineWidget (workspace bottom
+        # area) renders scenes as clips; this strip keeps the op buttons only.
+        self.list.setFixedHeight(0)
         self.list.currentRowChanged.connect(self._on_row)
 
         buttons = QHBoxLayout()
@@ -331,7 +351,8 @@ class PropertiesPanel(QWidget):
         self._obj: SceneObject | None = None
 
         self._spinboxes: dict[str, QDoubleSpinBox] = {}
-        form = QFormLayout()
+        transform_group = QGroupBox("Transform")
+        form = QFormLayout(transform_group)
         for key, label, lo, hi, step in self.FIELDS:
             box = QDoubleSpinBox()
             box.setRange(lo, hi)
@@ -347,6 +368,11 @@ class PropertiesPanel(QWidget):
         self.visible_check = QCheckBox("Visible")
         self.visible_check.toggled.connect(self._commit_visible)
 
+        basic_group = QGroupBox("Basic")
+        basic_form = QFormLayout(basic_group)
+        basic_form.addRow("Name", self.name_edit)
+        basic_form.addRow(self.visible_check)
+
         self.color_edit = QLineEdit()
         self.color_edit.setPlaceholderText("#7c4dff")
         self.color_edit.editingFinished.connect(self._commit_text_field)
@@ -356,10 +382,12 @@ class PropertiesPanel(QWidget):
         color_row = QHBoxLayout()
         color_row.addWidget(self.color_edit, 1)
         color_row.addWidget(color_btn)
+        basic_form.addRow("Color", color_row)
 
         self.text_edit = QLineEdit()
         self.text_edit.editingFinished.connect(self._commit_text_field)
         self.text_label = QLabel("Text")
+        basic_form.addRow(self.text_label, self.text_edit)
 
         key_btn = QPushButton("Set key @f")
         key_btn.clicked.connect(self._add_keyframes)
@@ -369,11 +397,16 @@ class PropertiesPanel(QWidget):
         clear_btn.clicked.connect(self._clear_tracks)
         self.kf_status = QLabel()
         self.kf_status.setObjectName("hint")
+        key_group = QGroupBox("Keyframes")
+        key_group_layout = QVBoxLayout(key_group)
+        key_group_layout.setContentsMargins(8, 8, 8, 6)
         key_row = QHBoxLayout()
         key_row.addWidget(key_btn)
         key_row.addWidget(del_key_btn)
         key_row.addWidget(clear_btn)
         key_row.addStretch(1)
+        key_group_layout.addLayout(key_row)
+        key_group_layout.addWidget(self.kf_status)
 
         # -- procedural / character actions ------------------------------
         self.action_combo = QComboBox()
@@ -385,34 +418,36 @@ class PropertiesPanel(QWidget):
         self.action_end.setRange(1, 360000)
         action_apply = QPushButton("Apply")
         action_apply.clicked.connect(self._apply_action)
+        follow_btn = QPushButton("Camera follow (over selected window)")
+        follow_btn.setObjectName("topbarBtn")
+        follow_btn.clicked.connect(self._camera_follow)
+        action_status = QLabel()
+        action_status.setObjectName("hint")
+        self.action_status = action_status
+        action_group = QGroupBox("Actions")
+        action_group_layout = QVBoxLayout(action_group)
+        action_group_layout.setContentsMargins(8, 8, 8, 6)
         action_row = QHBoxLayout()
         action_row.addWidget(self.action_combo, 1)
         action_row.addWidget(self.action_start)
         action_row.addWidget(self.action_end)
         action_row.addWidget(action_apply)
-        follow_btn = QPushButton("Camera follow object (over window)")
-        follow_btn.clicked.connect(self._camera_follow)
-        action_status = QLabel()
-        action_status.setObjectName("hint")
-        self.action_status = action_status
+        action_group_layout.addLayout(action_row)
+        action_group_layout.addWidget(follow_btn)
+        action_group_layout.addWidget(action_status)
 
         self.none_label = QLabel("Select an object on the canvas")
         self.none_label.setObjectName("hint")
+        self.none_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.editor = QWidget()
         editor_layout = QVBoxLayout(self.editor)
-        editor_layout.setContentsMargins(0, 0, 0, 0)
-        editor_layout.addLayout(form)
-        editor_layout.addLayout(key_row)
-        editor_layout.addWidget(_panel_header("Actions"))
-        editor_layout.addLayout(action_row)
-        editor_layout.addWidget(follow_btn)
-        editor_layout.addWidget(action_status)
-        editor_layout.addWidget(self.kf_status)
-        editor_layout.addWidget(self.name_edit)
-        editor_layout.addWidget(self.visible_check)
-        editor_layout.addLayout(color_row)
-        editor_layout.addWidget(self.text_label)
-        editor_layout.addWidget(self.text_edit)
+        editor_layout.setContentsMargins(8, 8, 8, 6)
+        editor_layout.setSpacing(8)
+        editor_layout.addWidget(transform_group)
+        editor_layout.addWidget(key_group)
+        editor_layout.addWidget(action_group)
+        editor_layout.addWidget(basic_group)
+        editor_layout.addStretch(1)
 
         self.stack = QStackedWidget()
         self.stack.addWidget(self.none_label)
@@ -461,13 +496,30 @@ class PropertiesPanel(QWidget):
         scene_form.addRow(camera_form)
         scene_form.addRow(camera_row)
 
+        scene_group = QGroupBox("Scene")
+        scene_layout = QVBoxLayout(scene_group)
+        scene_layout.setContentsMargins(8, 8, 8, 6)
+        scene_layout.addLayout(scene_form)
+        scene_layout.addLayout(camera_row)
+
+        self.tabs = QTabWidget()
+        object_page = QWidget()
+        object_layout = QVBoxLayout(object_page)
+        object_layout.setContentsMargins(0, 4, 0, 0)
+        object_layout.addWidget(self.stack)
+        scene_page = QWidget()
+        scene_page_layout = QVBoxLayout(scene_page)
+        scene_page_layout.setContentsMargins(4, 8, 4, 4)
+        scene_page_layout.addWidget(scene_group)
+        scene_page_layout.addStretch(1)
+        self.tabs.addTab(object_page, "Object")
+        self.tabs.addTab(scene_page, "Scene")
+        self.tabs.setCurrentIndex(0)
+
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(_panel_header("Properties"))
-        layout.addWidget(self.stack)
-        layout.addWidget(_panel_header("Scene"))
-        layout.addLayout(scene_form)
-        layout.addStretch(1)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(6)
+        layout.addWidget(self.tabs)
 
         for event in ("object.selected", "scene.updated", "scene.selected",
                       "project.opened", "project.created", "timeline.frame"):

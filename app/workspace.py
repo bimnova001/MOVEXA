@@ -141,7 +141,6 @@ class WorkspaceScreen(QWidget):
         self.canvas = CanvasWidget(controller)
         self.toolbar = QFrame()
         self.toolbar.setObjectName("topbar")
-
         home_btn = QPushButton("⌂ Home")
         home_btn.setObjectName("topbarBtn")
         home_btn.setToolTip("Back to the project menu")
@@ -151,6 +150,25 @@ class WorkspaceScreen(QWidget):
         self.project_label = QLabel()
         self.project_label.setObjectName("topbarTitle")
 
+        # Player header: timecode lives with the viewport (editor convention).
+        player_bar = QFrame()
+        player_bar.setObjectName("playerBar")
+        player_row = QHBoxLayout(player_bar)
+        player_row.setContentsMargins(10, 5, 10, 5)
+        player_title = QLabel("Player")
+        player_title.setObjectName("panelHeader")
+        self.timecode = QLabel("00:00 / 00:00")
+        self.timecode.setObjectName("timecode")
+        player_row.addWidget(player_title)
+        player_row.addStretch(1)
+        player_row.addWidget(self.timecode)
+
+        center_column = QWidget()
+        center_layout = QVBoxLayout(center_column)
+        center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.setSpacing(0)
+        center_layout.addWidget(player_bar)
+        center_layout.addWidget(self.canvas, 1)
         add_shape_btn = QPushButton("＋ Shape")
         add_shape_btn.setObjectName("topbarBtn")
         add_shape_btn.clicked.connect(self._add_shape)
@@ -239,7 +257,7 @@ class WorkspaceScreen(QWidget):
         self.properties.setMinimumWidth(230)
         self.properties.setMaximumWidth(340)
         splitter.addWidget(left_dock_widget)
-        splitter.addWidget(self.canvas)
+        splitter.addWidget(center_column)
         splitter.addWidget(self.properties_scroll)
         splitter.setStretchFactor(1, 1)
 
@@ -249,8 +267,17 @@ class WorkspaceScreen(QWidget):
         layout.addWidget(self.toolbar)
         layout.addWidget(splitter, 1)
         # Timeline row under the viewport, then transport: editor convention.
+        from app.timeline import TimelineWidget
+        self.timeline = TimelineWidget(controller)
         layout.addWidget(self.scene_strip)
+        layout.addWidget(self.timeline)
         layout.addWidget(self.transport)
+
+        # Timecode follows the playhead even while scrubbing the ruler.
+        for event in ("timeline.frame", "scene.updated", "scene.selected",
+                      "project.opened", "project.created"):
+            controller.bus.subscribe(event, self._update_timecode)
+        self._update_timecode({})
 
         # Preview clock. 30 Hz ticks are cheap; the player converts wall time
         # to fractional frames, so timer jitter does not cause drift.
@@ -289,6 +316,15 @@ class WorkspaceScreen(QWidget):
         self.left_dock.setCurrentIndex(index)
         for row, button in enumerate(self.rail_buttons):
             button.setChecked(row == index)
+
+    def _update_timecode(self, _data: dict | None = None) -> None:
+        player = self.controller.player
+        fps = max(1, player.fps)
+        frame = getattr(player, "frame", 0)
+        duration = max(1, getattr(player, "duration", 1))
+        self.timecode.setText(
+            f"{frame // fps:02d}:{frame % fps:02d} / "
+            f"{duration // fps:02d}:{duration % fps:02d}")
 
     def _add_shape(self) -> None:
         if self.controller.current_scene_id is None:

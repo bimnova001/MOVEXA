@@ -207,6 +207,16 @@ QLabel#frameCounter {{
     border-radius: 5px;
     color: {BRAND['cyan']};
 }}
+QFrame#playerBar {{
+    background: {BRAND['bg_panel']};
+    border-bottom: 1px solid {BRAND['border']};
+}}
+QLabel#timecode {{
+    color: {BRAND['cyan']};
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+}}
 
 /* ---- lists (assets, scenes) -------------------------------------------- */
 QListWidget {{
