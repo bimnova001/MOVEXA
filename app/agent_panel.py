@@ -158,9 +158,9 @@ class AgentPanel(QWidget):
         offline = provider_name == "mock"
         self.status_chip.setText("OFFLINE · mock" if offline else provider_name)
         self.status_chip.setStyleSheet(
-            "color: #8f8fa8; border: 1px solid #2a2a36; border-radius: 9px; "
+            "color: #9a9ab0; border: 1px solid #3a3a46; border-radius: 9px; "
             "padding: 2px 8px;" if offline else
-            "color: #22d3ee; border: 1px solid #2a2a36; border-radius: 9px; "
+            "color: #60a5fa; border: 1px solid #3a3a46; border-radius: 9px; "
             "padding: 2px 8px;")
 
     # -- provider settings ------------------------------------------------------

@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import svg_pixmap
 from app.controller import AppController
+from app.thumbs import cached_thumbnail
 
 log = logging.getLogger(__name__)
 
@@ -140,7 +141,7 @@ class NewProjectDialog(QDialog):
     # -- workflow ------------------------------------------------------------
 
 class ProjectCard(QFrame):
-    """Recent project card: name, scene stats, dbl-click opens, ✕ unpins."""
+    """Recent project card: thumbnail, name, meta, dbl-click opens, ✕ unpins."""
 
     def __init__(self, directory: str, on_open: Callable[[Path], None],
                  on_remove: Callable[[Path], None] | None = None) -> None:
@@ -148,6 +149,7 @@ class ProjectCard(QFrame):
         self.setObjectName("card")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip(directory)
+        self.setMaximumWidth(320)
         if on_remove is not None:
             self._on_remove = on_remove
         else:
@@ -158,19 +160,42 @@ class ProjectCard(QFrame):
         from json import JSONDecodeError, loads
         scenes = 0
         total_frames = 0
+        width = height = 0
+        fps = 30
         project_path = Path(directory) / "project.json"
         modified = "—"
+        data: dict = {}
         try:
             if project_path.exists():
                 mtime = project_path.stat().st_mtime
-                modified = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+                modified = datetime.fromtimestamp(mtime).strftime("%d %b %H:%M")
                 with open(project_path, encoding="utf-8") as fh:
                     data = loads(fh)
                 scenes = len(data.get("scenes", []))
                 total_frames = sum(int(s.get("duration_frames", 0))
                                    for s in data.get("scenes", []))
+                settings = data.get("settings", {})
+                width = int(settings.get("width", 0))
+                height = int(settings.get("height", 0))
+                fps = int(settings.get("fps", 30))
         except (OSError, JSONDecodeError, TypeError, ValueError):
             pass
+
+        self._thumbnail = QLabel()
+        self._thumbnail.setObjectName("cardThumb")
+        self._thumbnail.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pixmap = cached_thumbnail(directory, width=296)
+        if pixmap is not None and not pixmap.isNull():
+            self._thumbnail.setPixmap(pixmap.scaled(
+                self._thumbnail.width() or 296, 100,
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation))
+        else:
+            self._thumbnail.setFixedHeight(96)
+            self._thumbnail.setText("▦")
+            self._thumbnail.setStyleSheet(
+                "color:#3a3a46; font-size: 26px;"
+                "background:#232329; border-radius:8px;")
 
         title_row = QHBoxLayout()
         title_row.setContentsMargins(0, 0, 0, 0)
@@ -181,7 +206,7 @@ class ProjectCard(QFrame):
         if on_remove is not None:
             remove_btn = QPushButton("✕")
             remove_btn.setObjectName("cardRemove")
-            remove_btn.setFixedSize(24, 24)
+            remove_btn.setFixedSize(22, 22)
             remove_btn.setToolTip("Remove from recents (folder is kept)")
             remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             remove_btn.clicked.connect(
@@ -191,13 +216,15 @@ class ProjectCard(QFrame):
         caption = QLabel(f"Modified {modified}")
         caption.setObjectName("cardMeta")
         stats = QLabel(
-            f"{scenes} scene{'s' if scenes != 1 else ''}"
-            f" · {total_frames} frames" if scenes else "empty project")
+            (f"{width}×{height} · {fps} fps · {total_frames} frames"
+             if scenes else "empty project"))
         stats.setObjectName("cardMeta")
+        stats.setToolTip(f"{scenes} scene(s)")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 10, 12)
-        layout.setSpacing(3)
+        layout.setContentsMargins(10, 10, 10, 8)
+        layout.setSpacing(4)
+        layout.addWidget(self._thumbnail)
         layout.addLayout(title_row)
         layout.addWidget(caption)
         layout.addWidget(stats)
@@ -216,9 +243,9 @@ class DashboardScreen(QWidget):
         self.controller = controller
         self._enter_workspace = enter_workspace
 
-        # -- left branding column ------------------------------------------------
+        # -- left branding column (compact per review: 240px) --------------------
         logo = QLabel()
-        logo.setPixmap(svg_pixmap(120))
+        logo.setPixmap(svg_pixmap(72))
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         title = QLabel("MOVEXA")
@@ -233,47 +260,64 @@ class DashboardScreen(QWidget):
         version.setObjectName("hint")
         version.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        tagline = QLabel("AI-assisted 2D animation studio.\nKeyframes, rigs, AI takes, "
-                         "MP4 export — all in one place.")
+        tagline = QLabel("AI-assisted 2D animation studio: keyframes, rigs,\n"
+                         "AI takes and MP4 export in one place.")
         tagline.setObjectName("subtitle")
         tagline.setAlignment(Qt.AlignmentFlag.AlignCenter)
         tagline.setWordWrap(True)
 
+        browse_btn = QPushButton("Browse Projects…")
+        browse_btn.setObjectName("topbarBtn")
+        browse_btn.setToolTip("Open any MOVEXA project folder")
+        browse_btn.clicked.connect(self._open_dialog)
+
         branding = QVBoxLayout()
+        branding.setContentsMargins(12, 16, 12, 12)
+        branding.setSpacing(6)
         branding.addStretch(1)
         branding.addWidget(logo)
         branding.addWidget(title)
         branding.addWidget(subtitle)
-        branding.addSpacing(8)
+        branding.addSpacing(6)
         branding.addWidget(tagline)
-        branding.addSpacing(8)
-        branding.addWidget(version)
+        branding.addSpacing(10)
+        branding.addWidget(browse_btn)
         branding.addStretch(2)
+        branding.addWidget(version)
 
         brand_panel = QFrame()
         brand_panel.setObjectName("brandPanel")
         brand_panel.setLayout(branding)
-        brand_panel.setFixedWidth(300)
+        brand_panel.setFixedWidth(240)
 
-        # -- right column: hero actions + recents --------------------------------
+        # -- right column: balanced hero actions + recents -----------------------
         new_btn = QPushButton("＋ New Project")
         new_btn.setObjectName("hero")
         new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        new_btn.setMinimumHeight(64)
+        new_btn.setMinimumHeight(44)
         new_btn.clicked.connect(self._new_project)
 
         open_btn = QPushButton("Open Project Folder")
         open_btn.setObjectName("secondary")
-        open_btn.setMinimumHeight(64)
+        open_btn.setMinimumHeight(44)
         open_btn.clicked.connect(self._open_dialog)
 
         hero_row = QHBoxLayout()
         hero_row.setSpacing(10)
-        hero_row.addWidget(new_btn, 2)
+        hero_row.addWidget(new_btn, 1)
         hero_row.addWidget(open_btn, 1)
 
         recents_caption = QLabel("Recent projects")
         recents_caption.setObjectName("sectionHeader")
+        refresh_btn = QPushButton("⟳ Recent")
+        refresh_btn.setObjectName("topbarBtn")
+        refresh_btn.setToolTip("Refresh the recents list")
+        refresh_btn.clicked.connect(self._reload_recent)
+
+        recents_row = QHBoxLayout()
+        recents_row.addWidget(recents_caption)
+        recents_row.addStretch(1)
+        recents_row.addWidget(refresh_btn)
 
         self.cards_area = QScrollArea()
         self.cards_area.setWidgetResizable(True)
@@ -281,21 +325,39 @@ class DashboardScreen(QWidget):
         self.cards_container = QWidget()
         self.cards_container.setObjectName("cardsBackground")
         self.cards_grid = QGridLayout(self.cards_container)
-        self.cards_grid.setSpacing(12)
+        self.cards_grid.setSpacing(10)
         self.cards_grid.setContentsMargins(0, 0, 12, 0)
         self.cards_area.setWidget(self.cards_container)
 
-        self.empty_state = QLabel(
-            "No projects yet — create your first one to get started.")
-        self.empty_state.setObjectName("hint")
-        self.empty_state.setWordWrap(True)
-        self.cards_grid.addWidget(self.empty_state, 0, 0)
+        # Empty state: welcoming panel with its own CTA.
+        empty_widget = QWidget()
+        empty_layout = QVBoxLayout(empty_widget)
+        empty_layout.addStretch(1)
+        empty_icon = QLabel()
+        empty_icon.setPixmap(svg_pixmap(56))
+        empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_text = QLabel("No projects yet.\n"
+                            "Create your first animation to get started.")
+        empty_text.setObjectName("hint")
+        empty_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_cta = QPushButton("Create your first project")
+        self.empty_cta.setObjectName("primary")
+        self.empty_cta.setMinimumHeight(40)
+        self.empty_cta.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.empty_cta.clicked.connect(self._new_project)
+        empty_layout.addWidget(empty_icon)
+        empty_layout.addSpacing(8)
+        empty_layout.addWidget(empty_text)
+        empty_layout.addSpacing(10)
+        empty_layout.addWidget(self.empty_cta, 0, Qt.AlignmentFlag.AlignCenter)
+        empty_layout.addStretch(2)
+        self.empty_state = empty_widget
 
         column = QVBoxLayout()
-        column.setContentsMargins(24, 24, 24, 24)
-        column.setSpacing(14)
+        column.setContentsMargins(20, 20, 20, 20)
+        column.setSpacing(12)
         column.addLayout(hero_row)
-        column.addWidget(recents_caption)
+        column.addLayout(recents_row)
         column.addWidget(self.cards_area, 1)
 
         column_widget = QWidget()
@@ -313,16 +375,16 @@ class DashboardScreen(QWidget):
 
     def _reload_recent(self) -> None:
         # Remove previous cards, but never delete the shared empty-state
-        # label itself - it gets re-added to the grid on every pass.
+        # widget itself - it gets re-added to the grid on every pass.
         keep_empty = self.empty_state
         while self.cards_grid.count():
             item = self.cards_grid.takeAt(0)
             widget = item.widget()
             if widget is not None and widget is not keep_empty:
                 widget.deleteLater()
+        self.cards_grid.addWidget(self.empty_state, 0, 0, 1, 3)
         directories = self.controller.manager.load_recent()[:MAX_RECENT_CARDS]
         if not directories:
-            self.cards_grid.addWidget(self.empty_state, 0, 0)
             self.empty_state.show()
             return
         self.empty_state.hide()

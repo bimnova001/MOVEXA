@@ -50,11 +50,42 @@ class CanvasWidget(QWidget):
         self.setMinimumHeight(240)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._drag: tuple[str, float, float] | None = None  # (obj id, grab dx, grab dy)
+        self._panning = False
+        self._zoom = 1.0                    # 1.0 == fit-to-view
+        self._pan = QPointF(0.0, 0.0)       # widget-pixel offset
+        self._pan_at: QPointF | None = None
+        self._show_grid = False
+        self._show_safe = False
+        self.setMouseTracking(True)
         bus = controller.bus
         for event in ("scene.updated", "scene.selected", "scene.created",
                       "scene.removed", "project.opened", "project.created",
                       "timeline.frame"):
             bus.subscribe(event, lambda _data: self.update())
+
+    # -- zoom / pan controls ---------------------------------------------------
+
+    def fit_view(self) -> None:
+        self._zoom = 1.0
+        self._pan = QPointF(0.0, 0.0)
+        self.update()
+
+    def set_zoom(self, factor: float) -> None:
+        self._zoom = max(0.1, min(8.0, factor))
+        self.update()
+
+    def toggle_grid(self, on: bool) -> None:
+        self._show_grid = on
+        self.update()
+
+    def toggle_safe(self, on: bool) -> None:
+        self._show_safe = on
+        self.update()
+
+    def wheelEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
+        self._zoom = max(0.1, min(8.0, self._zoom * factor))
+        self.update()
 
     def _stage_size(self) -> tuple[float, float]:
         project = self.controller.project
@@ -65,8 +96,11 @@ class CanvasWidget(QWidget):
     def _view_params(self) -> tuple[float, float, float]:
         """Return (scale, offset_x, offset_y) mapping stage->widget pixels."""
         sw, sh = self._stage_size()
-        scale = min((self.width() - 2) / sw, (self.height() - 2) / sh)
-        return scale, (self.width() - sw * scale) / 2, (self.height() - sh * scale) / 2
+        fit = min((self.width() - 2) / sw, (self.height() - 2) / sh)
+        scale = fit * self._zoom
+        ox = (self.width() - sw * scale) / 2 + self._pan.x()
+        oy = (self.height() - sh * scale) / 2 + self._pan.y()
+        return scale, ox, oy
 
     def _to_stage(self, pos: QPointF) -> tuple[float, float]:
         scale, ox, oy = self._view_params()
@@ -118,6 +152,35 @@ class CanvasWidget(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(QColor("#2a2a36"), 1))
         painter.drawRect(QRectF(0, 0, sw, sh))
+
+        self._paint_overlays(painter, scale, ox, oy, sw, sh)
+
+    def _paint_overlays(self, painter: QPainter, scale: float,
+                        ox: float, oy: float, sw: float, sh: float) -> None:
+        """Thirds grid + title/action-safe guides, thin over the stage only."""
+        if not (self._show_grid or self._show_safe):
+            return
+        stage = QRectF(ox, oy, sw * scale, sh * scale)
+        if self._show_grid:
+            painter.setPen(QPen(QColor(96, 165, 250, 60), 1))
+            for i in (1, 2):
+                x = stage.left() + stage.width() * i / 3
+                y = stage.top() + stage.height() * i / 3
+                painter.drawLine(QPointF(x, stage.top()),
+                                 QPointF(x, stage.bottom()))
+                painter.drawLine(QPointF(stage.left(), y),
+                                 QPointF(stage.right(), y))
+        if self._show_safe:
+            for ratio, style in ((0.9, Qt.PenStyle.DashLine),
+                                 (0.8, Qt.PenStyle.DotLine)):
+                box = stage.adjusted(
+                    stage.width() * (1 - ratio) / 2,
+                    stage.height() * (1 - ratio) / 2,
+                    -stage.width() * (1 - ratio) / 2,
+                    -stage.height() * (1 - ratio) / 2)
+                painter.setPen(QPen(QColor(96, 165, 250, 110), 1, style))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawRect(box)
 
     def _paint_scene_pass(
         self, painter: QPainter, project: Project, scene, frame: int,
@@ -277,6 +340,13 @@ class CanvasWidget(QWidget):
         painter.restore()
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.MiddleButton or (
+                event.button() == Qt.MouseButton.LeftButton
+                and event.modifiers() & Qt.KeyboardModifier.AltModifier):
+            self._pan_at = event.position()
+            self._panning = True
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            return
         if event.button() != Qt.MouseButton.LeftButton:
             return
         scene = self._current_scene()
@@ -293,6 +363,13 @@ class CanvasWidget(QWidget):
         self._drag = (hit.id, sx - world_x, sy - world_y)
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        if self._panning and self._pan_at is not None:
+            delta = event.position() - self._pan_at
+            self._pan = QPointF(self._pan.x() + delta.x(),
+                                self._pan.y() + delta.y())
+            self._pan_at = event.position()
+            self.update()
+            return
         if self._drag is None:
             return
         scene = self._current_scene()
@@ -309,6 +386,10 @@ class CanvasWidget(QWidget):
 
     def mouseReleaseEvent(self, _event) -> None:  # noqa: N802
         self._drag = None
+        if self._panning:
+            self._panning = False
+            self._pan_at = None
+            self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def _current_scene(self):
         project = self.controller.project

@@ -150,17 +150,41 @@ class WorkspaceScreen(QWidget):
         self.project_label = QLabel()
         self.project_label.setObjectName("topbarTitle")
 
-        # Player header: timecode lives with the viewport (editor convention).
+        # Player header: zoom presets + overlay toggles + timecode.
         player_bar = QFrame()
         player_bar.setObjectName("playerBar")
         player_row = QHBoxLayout(player_bar)
         player_row.setContentsMargins(10, 5, 10, 5)
         player_title = QLabel("Player")
         player_title.setObjectName("panelHeader")
+
+        self.zoom_combo = QComboBox()
+        for label, factor in (("Fit", 1.0), ("50%", 0.5), ("100%", 1.0),
+                              ("200%", 2.0)):
+            self.zoom_combo.addItem(label, factor)
+        self.zoom_combo.currentIndexChanged.connect(self._zoom_changed)
+        self.zoom_combo.setToolTip("Zoom (mouse wheel zooms on the canvas; "
+                                   "Alt-drag or middle-drag pans)")
+
+        self.grid_btn = QPushButton("▦ Grid")
+        self.grid_btn.setObjectName("topbarBtn")
+        self.grid_btn.setCheckable(True)
+        self.grid_btn.setToolTip("Thirds grid overlay")
+        self.grid_btn.toggled.connect(self.canvas.toggle_grid)
+
+        self.safe_btn = QPushButton("□ Safe")
+        self.safe_btn.setObjectName("topbarBtn")
+        self.safe_btn.setCheckable(True)
+        self.safe_btn.setToolTip("Title (90%) and action (80%) safe areas")
+        self.safe_btn.toggled.connect(self.canvas.toggle_safe)
+
         self.timecode = QLabel("00:00 / 00:00")
         self.timecode.setObjectName("timecode")
         player_row.addWidget(player_title)
         player_row.addStretch(1)
+        player_row.addWidget(self.grid_btn)
+        player_row.addWidget(self.safe_btn)
+        player_row.addWidget(self.zoom_combo)
         player_row.addWidget(self.timecode)
 
         center_column = QWidget()
@@ -186,20 +210,45 @@ class WorkspaceScreen(QWidget):
         export_btn.setObjectName("primary")
         export_btn.clicked.connect(self._export_mp4)
 
+        play_btn = QPushButton("▶")
+        play_btn.setObjectName("topbarBtn")
+        play_btn.setToolTip("Play / Pause (Space)")
+        play_btn.clicked.connect(lambda: self.transport._toggle_play())
+
+        def separator() -> QFrame:
+            line = QFrame()
+            line.setObjectName("toolbarSep")
+            line.setFixedWidth(1)
+            line.setFixedHeight(22)
+            line.setStyleSheet(
+                "QFrame#toolbarSep {{ background: {b}; }}".format(b="#3a3a46"))
+            return line
+
+        def group(tag: str) -> QLabel:
+            label = QLabel(tag)
+            label.setObjectName("topbarGroup")
+            return label
+
         bar = QHBoxLayout(self.toolbar)
-        bar.setContentsMargins(10, 8, 10, 8)
-        bar.setSpacing(8)
+        bar.setContentsMargins(10, 6, 10, 6)
+        bar.setSpacing(6)
         logo = QLabel()
-        logo.setPixmap(svg_pixmap(24))
+        logo.setPixmap(svg_pixmap(20))
         bar.addWidget(logo)
+        bar.addWidget(group("PROJECT"))
         bar.addWidget(home_btn)
-        bar.addSpacing(4)
         bar.addWidget(self.project_label)
-        bar.addStretch(1)
+        bar.addWidget(separator())
+        bar.addWidget(group("OBJECTS"))
         bar.addWidget(add_shape_btn)
         bar.addWidget(add_text_btn)
         bar.addWidget(add_rig_btn)
-        bar.addSpacing(4)
+        bar.addWidget(separator())
+        bar.addWidget(group("PLAYBACK"))
+        bar.addWidget(play_btn)
+        bar.addStretch(1)
+        bar.addWidget(separator())
+        bar.addWidget(group("EXPORT"))
         bar.addWidget(export_btn)
 
         self.asset_browser = AssetBrowser(controller)
@@ -235,7 +284,7 @@ class WorkspaceScreen(QWidget):
             self.rail.addWidget(button, 0, Qt.AlignmentFlag.AlignHCenter)
             self.rail_buttons.append(button)
         self.rail.addStretch(1)
-        rail_widget.setFixedWidth(48)
+        rail_widget.setFixedWidth(52)
 
         self.left_dock = QStackedWidget()
         self.left_dock.addWidget(self.asset_browser)
@@ -252,25 +301,39 @@ class WorkspaceScreen(QWidget):
         self.scene_strip = SceneStrip(controller)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.left_dock.setMinimumWidth(220)
-        self.left_dock.setMaximumWidth(440)
-        self.properties.setMinimumWidth(230)
-        self.properties.setMaximumWidth(340)
+        self.left_dock.setMinimumWidth(240)
+        self.left_dock.setMaximumWidth(460)
+        self.properties.setMinimumWidth(260)
+        self.properties_scroll.setMaximumWidth(520)
         splitter.addWidget(left_dock_widget)
         splitter.addWidget(center_column)
         splitter.addWidget(self.properties_scroll)
         splitter.setStretchFactor(1, 1)
+        # Review proportions for 1920x1080: assets ~270, inspector ~320.
+        splitter.setSizes([270 + 52, 900, 320])
+
+        # Bottom cluster (scene tools + timeline) sits in a vertical splitter
+        # so users can hand more room to the timeline than the preview.
+        bottom_cluster = QWidget()
+        bottom_layout = QVBoxLayout(bottom_cluster)
+        bottom_layout.setContentsMargins(0, 4, 0, 0)
+        bottom_layout.setSpacing(0)
+        bottom_layout.addWidget(self.scene_strip)
+        from app.timeline import TimelineWidget
+        self.timeline = TimelineWidget(controller)
+        bottom_layout.addWidget(self.timeline)
+
+        vertical_splitter = QSplitter(Qt.Orientation.Vertical)
+        vertical_splitter.addWidget(splitter)
+        vertical_splitter.addWidget(bottom_cluster)
+        vertical_splitter.setStretchFactor(0, 1)
+        vertical_splitter.setSizes([720, 130])
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self.toolbar)
-        layout.addWidget(splitter, 1)
-        # Timeline row under the viewport, then transport: editor convention.
-        from app.timeline import TimelineWidget
-        self.timeline = TimelineWidget(controller)
-        layout.addWidget(self.scene_strip)
-        layout.addWidget(self.timeline)
+        layout.addWidget(vertical_splitter, 1)
         layout.addWidget(self.transport)
 
         # Timecode follows the playhead even while scrubbing the ruler.
@@ -316,6 +379,11 @@ class WorkspaceScreen(QWidget):
         self.left_dock.setCurrentIndex(index)
         for row, button in enumerate(self.rail_buttons):
             button.setChecked(row == index)
+
+    def _zoom_changed(self) -> None:
+        factor = self.zoom_combo.currentData()
+        if factor is not None:
+            self.canvas.set_zoom(float(factor))
 
     def _update_timecode(self, _data: dict | None = None) -> None:
         player = self.controller.player

@@ -141,7 +141,7 @@ class LoadingScreen(QWidget):
             return
         result = results[index]
         icon = "✓" if result.ok else ("!" if result.required else "!")
-        color = BRAND["cyan"] if result.ok else BRAND["danger"]
+        color = BRAND["blue_light"] if result.ok else BRAND["danger"]
         row = self._row_labels[index]
         row.setText(f"{icon}  {result.name} — {result.detail}")
         row.setStyleSheet(f"color: {color};")
@@ -169,7 +169,7 @@ class LoadingScreen(QWidget):
         if index >= len(self._row_labels):
             return
         icon = "✓" if result.ok else "!"
-        color = BRAND["cyan"] if result.ok else BRAND["danger"]
+        color = BRAND["blue_light"] if result.ok else BRAND["danger"]
         row = self._row_labels[index]
         row.setText(f"{icon}  {result.name} — {result.detail}")
         row.setStyleSheet(f"color: {color};")
